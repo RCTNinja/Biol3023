@@ -1,0 +1,77 @@
+---
+title: "Simulating honey bee population data"
+format: html
+---
+
+Consideration: CSD alleles
+
+
+```{r}
+library(tidyverse)
+# library(poolHelper) This library is not currently used, but may be used in the future to simulate more realistic pool sequencing data
+library(SIMplyBee)
+```
+
+### Overall simulation approach
+
+We simulate `n_colonies` of bees. We have `n_chromosomes` unlinked loci, where each locus is currently simulated as mostly genetically distinct.
+
+```{r}
+n_colonies <- 7   # number of colonies in the population 
+n_loci <- 2000      # number of loci in the genome 
+loci_keep <- 1:20  # number of loci to keep for analysis, the rest are discarded
+n_chromosomes <- 13 # number of chromosomes in the genome
+
+n_drones_sampled <- 33 # number of drones sampled from the population (without replacement)
+
+founderGenomes <- simulateHoneyBeeGenomes(nCar = n_colonies, nSegSites = n_loci, nChr = n_chromosomes, recRate = 0) # assuming no recombination, each locus is unlinked
+
+SP <- SimParamBee$new(founderGenomes, 
+                      csdChr = n_chromosomes, 
+                      nCsdAlleles = 32 )
+
+basePop <- createVirginQueens(founderGenomes)
+DCA <- createDrones(basePop, nInd = n_drones_sampled)
+
+droneGroups <- pullDroneGroupsFromDCA(DCA, n = 1, nDrones = n_drones_sampled)
+dro_geno <- as.data.frame(getDronesSegSiteGeno(droneGroups[[1]])) # drones in rows, loci in columns
+```
+
+There is some pretty reformatting of the data, so that the final matrix contains one row per drone and one column per locus, as well as a column of mother IDs.
+
+```{r}
+# Add a row identifier to keep track of rows after pivoting
+dro_geno <- dro_geno %>%
+  dplyr::mutate(row_id = row_number())
+
+dro_geno_new <- dro_geno %>%
+  # Move from wide to long format
+  pivot_longer(
+    cols = -row_id, 
+    names_to = "original_col", 
+    values_to = "value"
+  ) %>%
+  # Separate the prefix and suffix
+  separate(original_col, into = c("prefix", "suffix"), sep = "_", convert = TRUE) %>%
+  # Group by row and prefix, and paste all values for that prefix together
+  filter(suffix %in% loci_keep) %>%
+  group_by(row_id, prefix) %>%
+
+  summarise(value = paste(value, collapse = ""), .groups = "drop") %>%
+  # Move back to wide format with one column per prefix
+  pivot_wider(names_from = prefix, values_from = value) %>%
+  # Remove the row_id now that we have our final structure
+  select(-row_id)
+
+dro_geno_new$mother <- droneGroups[[1]]@mother 
+```
+
+```{r}
+colony_id <- 1 # manually vary from 1 to n_colonies
+for (i in 1:n_chromosomes) {
+    data <- dro_geno_new[dro_geno_new$mother == colony_id,i] # alleles at locus i from one colony
+    print(nrow(unique(data))) # number of unique alleles for this colony at locus (chromosome) i
+}
+ 
+
+```
