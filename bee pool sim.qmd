@@ -73,5 +73,17 @@ for (i in 1:n_chromosomes) {
     print(nrow(unique(data))) # number of unique alleles for this colony at locus (chromosome) i
 }
  
+unique_alleles_df <- data.frame(matrix(nrow = n_colonies, ncol = n_chromosomes)) # empty matrix to store results
+rownames(unique_alleles_df) <- unique(dro_geno_new$mother)  # colonies
+colnames(unique_alleles_df) <- paste0("Chr_", 1:n_chromosomes)  # chromosomes
+
+for (colony_id in unique(dro_geno_new$mother)) {  # loop over all colonies
+    for (i in 1:n_chromosomes) {  # loop over all chromosomes
+        data <- dro_geno_new[dro_geno_new$mother == colony_id, i]  # alleles at locus i from one colony
+        num_unique <- nrow(unique(data))  # number of unique alleles for this colony at locus (chromosome) i
+        
+        unique_alleles_df[colony_id, i] <- nrow(unique(data)) # results to dataframe
+    }
+}
 
 ```
